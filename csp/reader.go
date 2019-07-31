@@ -3,6 +3,7 @@ package csp
 import (
 	"bytes"
 	"io"
+	"log"
 	"os"
 )
 
@@ -33,35 +34,42 @@ func skipBOMSummaryHeading(fd *os.File) {
 }
 
 func skipSummary(fd *os.File) error {
+	lf, err := os.OpenFile("log.txt", os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return err
+	}
+	defer lf.Close()
+	log.SetOutput(lf)
 	var offset int64
 	var retErr error
-	//finfo, _ := fd.Stat()
-	//log.Println("skipping Summary of file:", finfo.Name(), "with mode", finfo.Mode().String())
+	finfo, _ := fd.Stat()
+	log.Println("skipping Summary of file:", finfo.Name(), "with mode", finfo.Mode().String())
 	discard := make([]byte, 1024)
 	for {
 		n, err := fd.Read(discard)
 		if n == 0 {
 			retErr = err
-			//log.Println("n = 0 with eror", err)
+			log.Println("n = 0 with eror", err)
 			break
 		}
 		h := []byte("Daily Usage\"")
 		i := bytes.Index(discard, h)
 		if i != -1 {
-			//log.Println("i = ", i)
-			//log.Println(string(discard[i : i+len(h)]))
+			log.Println("i = ", i)
+			log.Println(string(discard[i : i+len(h)]))
 			offset += int64(i + len(h) + 14)
 			break
 		}
 		offset += int64(n)
-		//log.Println("i = -1")
+		log.Println(string(discard[:n]))
+		log.Println("i = -1")
 
 	}
 	if retErr != nil {
 		return retErr
 	}
-	_, err := fd.Seek(offset, 0)
-	//log.Println("calc offset", offset, "real offset", off)
+	_, err = fd.Seek(offset, 0)
+	log.Println("calc offset", offset)
 	return err
 }
 
