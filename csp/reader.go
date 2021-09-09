@@ -13,7 +13,7 @@ type Reader struct {
 	eof     bool
 }
 
-func NewCspReader(fd *os.File, summary bool) *Reader {
+func NewCspReader(fd *os.File, summary bool) (*Reader, error) {
 	var err error
 	switch summary {
 	case true:
@@ -23,10 +23,10 @@ func NewCspReader(fd *os.File, summary bool) *Reader {
 		err = skipSummary(fd)
 	}
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return &Reader{r: fd, summary: summary}
+	return &Reader{r: fd, summary: summary}, nil
 }
 
 //func skipBOMSummaryHeading(fd *os.File) {
