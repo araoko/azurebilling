@@ -2,6 +2,7 @@ package csp
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 )
@@ -13,63 +14,77 @@ type Reader struct {
 }
 
 func NewCspReader(fd *os.File, summary bool) *Reader {
-	skipBOMSummaryHeading(fd)
-	if !summary {
-		err := skipSummary(fd)
-		if err != nil {
-			panic(err)
-		}
+	var err error
+	switch summary {
+	case true:
+		err = skipBOMSummaryHeading(fd)
+
+	case false:
+		err = skipSummary(fd)
 	}
+	if err != nil {
+		return nil
+	}
+
 	return &Reader{r: fd, summary: summary}
 }
 
-func skipBOMSummaryHeading(fd *os.File) {
-	//Byte Order Mark (BOM) and summary headiing is 14 bytes
-	var discard [14]byte
-	_, err := io.ReadFull(fd, discard[:])
-	if err != nil {
-		panic(err)
+//func skipBOMSummaryHeading(fd *os.File) {
+//	//Byte Order Mark (BOM) and summary headiing is 14 bytes
+//	var discard [14]byte
+//	_, err := io.ReadFull(fd, discard[:])
+//	if err != nil {
+//		panic(err)
+//	}
+//}
+
+const maxSearchByte = 15
+
+func skipBOMSummaryHeading(fd *os.File) error {
+	//locate the first newline byte and skip to after it
+	bb := make([]byte, 1)
+	var offset int
+	var err error
+	for {
+		if offset > maxSearchByte {
+			return fmt.Errorf("could not skipSummary beginig of csv data after %d bytes. Fine invalid", maxSearchByte)
+		}
+		_, err = fd.Read(bb)
+		if err != nil {
+			return err
+		}
+		offset++
+		if bb[0] == 10 {
+			break
+		}
 	}
+
+	return nil
 }
 
-func skipSummary(fd *os.File) error {
-	// lf, err := os.OpenFile("log.txt", os.O_CREATE|os.O_APPEND, 0666)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer lf.Close()
-	//log.SetOutput(lf)
-	var offset int64
-	var retErr error
-	//finfo, _ := fd.Stat()
-	//log.Println("skipping Summary of file:", finfo.Name(), "with mode", finfo.Mode().String())
-	discard := make([]byte, 1024)
-	for {
-		n, err := fd.Read(discard)
-		if n == 0 {
-			retErr = err
-			//log.Println("n = 0 with eror", err)
-			break
-		}
-		h := []byte("Daily Usage\"")
-		i := bytes.Index(discard, h)
-		if i != -1 {
-			//log.Println("i = ", i)
-			//log.Println(string(discard[i : i+len(h)]))
-			offset += int64(i + len(h) + 14)
-			break
-		}
-		offset += int64(n)
-		//log.Println(string(discard[:n]))
-		//log.Println("i = -1")
+const chunkSize = 4096
 
+func skipSummary(fd *os.File) error {
+	var offset int64
+	search := []byte("Daily Usage")
+	chunk := make([]byte, chunkSize+len(search))
+	for {
+		n, err := fd.ReadAt(chunk, offset)
+		idx := bytes.Index(chunk[:n], search)
+		if idx >= 0 {
+			_, err = fd.Seek(offset+int64(idx)+2, 0)
+			return err
+		}
+
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		offset += chunkSize
 	}
-	if retErr != nil {
-		return retErr
-	}
-	_, err := fd.Seek(offset, 0)
-	//log.Println("calc offset", offset)
-	return err
+	return fmt.Errorf("not found")
 }
 
 func (c *Reader) Read(b []byte) (int, error) {
