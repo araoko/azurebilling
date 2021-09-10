@@ -72,7 +72,7 @@ func skipSummary(fd *os.File) error {
 		n, err := fd.ReadAt(chunk, offset)
 		idx := bytes.Index(chunk[:n], search)
 		if idx >= 0 {
-			_, err = fd.Seek(offset+int64(idx)+2, 0)
+			_, err = fd.Seek(offset+int64(idx+len(search))+2, 0)
 			return err
 		}
 
